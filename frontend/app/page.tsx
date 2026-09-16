@@ -385,6 +385,8 @@ export default function Home() {
           <div className={`rail-connector${isLive ? "" : " demo-connector"}`} role="progressbar" aria-label={isLive ? "Estimated section progress" : "Animated demo section progress"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progressFraction * 100)} aria-valuetext={progressDescription}>
             <div className="rail-track" aria-hidden="true" />
             <div className="rail-complete" aria-hidden="true" style={connectorStyle} />
+            <div className="rail-endpoint rail-endpoint-start" aria-hidden="true" />
+            <div className={`rail-endpoint rail-endpoint-end${progressFraction >= .99 ? " is-complete" : ""}`} aria-hidden="true" />
             <div className="rail-marker" aria-hidden="true" style={connectorStyle}><span>{Math.round(progressFraction * 100)}%</span></div>
           </div>
         </section>
