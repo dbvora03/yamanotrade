@@ -73,11 +73,6 @@ type SectionChanged = {
   current_segment: { from_station: string; to_station: string; direction: string };
 };
 
-type StationConfirmed = {
-  train_id: string;
-  station: string;
-};
-
 type Segment = { origin: number; destination: number };
 type WheelTransition = Segment & { leaving: number; key: number };
 const demoInitialSegment: Segment = { origin: 21, destination: 20 };
@@ -90,6 +85,15 @@ function stationName(value: string) {
 function stationIndex(value: string) {
   const normalized = stationName(value).toLocaleLowerCase();
   return stations.findIndex((station) => station.toLocaleLowerCase() === normalized);
+}
+
+function segmentForObservation(fromStation: string, toStation: string, direction: string): Segment | null {
+  const origin = stationIndex(fromStation);
+  if (origin < 0) return null;
+  const reportedDestination = stationIndex(toStation);
+  if (reportedDestination >= 0) return { origin, destination: reportedDestination };
+  const step = direction.toLocaleLowerCase().includes("outer") ? -1 : 1;
+  return { origin, destination: (origin + step + stations.length) % stations.length };
 }
 
 function formattedTime(value?: string) {
@@ -139,7 +143,6 @@ export default function Home() {
   const [transitionProgress, setTransitionProgress] = useState<{ trainId: string; fraction: number } | null>(null);
   const [visibleSegment, setVisibleSegment] = useState<Segment | null>(liveMode && apiBase ? null : demoInitialSegment);
   const visibleSegmentRef = useRef<Segment | null>(liveMode && apiBase ? null : demoInitialSegment);
-  const pendingSegmentRef = useRef<Segment | null>(null);
   const [wheelTransition, setWheelTransition] = useState<WheelTransition | null>(null);
   const [demoFraction, setDemoFraction] = useState(0);
   const wheelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -156,13 +159,16 @@ export default function Home() {
       selectedTrainIdRef.current = selectedTrain.id;
       setSelectedTrainId(selectedTrain.id);
     }
-    const sectionStart = selectedTrain ? stationIndex(selectedTrain.from_station) : -1;
-    const sectionEnd = selectedTrain ? stationIndex(selectedTrain.to_station) : -1;
-    if (sectionStart >= 0) setIndex(sectionStart);
-    if (sectionStart >= 0 && sectionEnd >= 0 && !visibleSegmentRef.current) {
-      const segment = { origin: sectionStart, destination: sectionEnd };
-      visibleSegmentRef.current = segment;
-      setVisibleSegment(segment);
+    const segment = selectedTrain
+      ? segmentForObservation(selectedTrain.from_station, selectedTrain.to_station, selectedTrain.direction)
+      : null;
+    if (segment) {
+      setIndex(segment.origin);
+      const visible = visibleSegmentRef.current;
+      if (!visible || visible.origin !== segment.origin || visible.destination !== segment.destination) {
+        visibleSegmentRef.current = segment;
+        setVisibleSegment(segment);
+      }
     }
     setTransitionProgress(null);
   }, []);
@@ -218,23 +224,14 @@ export default function Home() {
       try {
         const change = JSON.parse((event as MessageEvent<string>).data) as SectionChanged;
         if (change.train_id !== selectedTrainIdRef.current) return;
-        const sectionStart = stationIndex(change.current_segment.from_station);
-        const sectionEnd = stationIndex(change.current_segment.to_station);
-        if (sectionStart >= 0 && sectionEnd >= 0) pendingSegmentRef.current = { origin: sectionStart, destination: sectionEnd };
-      } catch {
-        setConnection("reconnecting");
-      }
-    });
-    stream.addEventListener("station.confirmed", (event) => {
-      try {
-        const confirmation = JSON.parse((event as MessageEvent<string>).data) as StationConfirmed;
-        if (confirmation.train_id !== selectedTrainIdRef.current) return;
-        const confirmedIndex = stationIndex(confirmation.station);
-        const next = pendingSegmentRef.current;
-        if (confirmedIndex >= 0 && next && next.origin === confirmedIndex) {
+        const next = segmentForObservation(
+          change.current_segment.from_station,
+          change.current_segment.to_station,
+          change.current_segment.direction
+        );
+        if (next) {
           setIndex(next.origin);
-          startWheelTransition(next, confirmation.train_id);
-          pendingSegmentRef.current = null;
+          startWheelTransition(next, change.train_id);
         }
       } catch {
         setConnection("reconnecting");
@@ -265,7 +262,7 @@ export default function Home() {
       }
     };
     void loadStatus();
-    const timer = window.setInterval(() => void loadStatus(), 30_000);
+    const timer = window.setInterval(() => void loadStatus(), 5_000);
     return () => {
       active = false;
       window.clearInterval(timer);
@@ -275,6 +272,13 @@ export default function Home() {
   const activeTrain = useMemo(
     () => snapshot.trains.find((train) => train.id === selectedTrainId) ?? snapshot.trains[0],
     [selectedTrainId, snapshot.trains]
+  );
+  const routeOrderedTrains = useMemo(
+    () => [...snapshot.trains].sort((left, right) => {
+      const stationDifference = stationIndex(left.from_station) - stationIndex(right.from_station);
+      return stationDifference || left.train_number.localeCompare(right.train_number);
+    }),
+    [snapshot.trains]
   );
 
   const isLive = liveMode && Boolean(apiBase);
@@ -290,18 +294,23 @@ export default function Home() {
       : activeTrain?.progress?.estimated_fraction ?? 0))
     : demoFraction;
   const selectTrain = (trainId: string) => {
+    const train = snapshot.trains.find((item) => item.id === trainId);
+    if (!train) return;
     selectedTrainIdRef.current = trainId;
     setSelectedTrainId(trainId);
     setTransitionProgress(null);
-    const train = snapshot.trains.find((item) => item.id === trainId);
-    const sectionStart = train ? stationIndex(train.from_station) : -1;
-    const sectionEnd = train ? stationIndex(train.to_station) : -1;
-    if (sectionStart >= 0) setIndex(sectionStart);
-    if (sectionStart >= 0 && sectionEnd >= 0) {
-      const segment = { origin: sectionStart, destination: sectionEnd };
-      visibleSegmentRef.current = segment;
-      setVisibleSegment(segment);
-    }
+    const segment = segmentForObservation(train.from_station, train.to_station, train.direction);
+    if (!segment) return;
+    setIndex(segment.origin);
+    visibleSegmentRef.current = segment;
+    setVisibleSegment(segment);
+    setWheelTransition(null);
+  };
+  const selectAdjacentTrain = (offset: -1 | 1) => {
+    if (routeOrderedTrains.length < 2) return;
+    const currentIndex = routeOrderedTrains.findIndex((train) => train.id === activeTrain?.id);
+    const nextIndex = ((currentIndex < 0 ? 0 : currentIndex) + offset + routeOrderedTrains.length) % routeOrderedTrains.length;
+    selectTrain(routeOrderedTrains[nextIndex].id);
   };
   const statusLabel = connection === "demo" ? "Demo mode" : connection === "live" ? "Live section feed" : connection === "connecting" ? "Connecting" : connection === "reconnecting" ? "Reconnecting" : "Feed unavailable";
   const serviceLabel = serviceStatus.status === "active"
@@ -364,54 +373,51 @@ export default function Home() {
           )}
         </header>
         <section className="station-stage" aria-label="Yamanote loop station explorer">
+          {isLive && snapshot.trains.length > 1 && (
+            <>
+              <button type="button" className="station-nav station-nav-previous" aria-label="Select previous live train" onClick={() => selectAdjacentTrain(-1)}><span aria-hidden="true" /></button>
+              <button type="button" className="station-nav station-nav-next" aria-label="Select next live train" onClick={() => selectAdjacentTrain(1)}><span aria-hidden="true" /></button>
+            </>
+          )}
           <div className={`station-wheel${wheelTransition ? " station-wheel-moving" : ""}`} aria-live="polite">
             {wheelTransition ? (
               <>
-                <StationCard index={wheelTransition.leaving} position="leaving" isLive={isLive} />
-                <StationCard index={wheelTransition.origin} position="origin" isLive={isLive} />
-                <StationCard index={wheelTransition.destination} position="destination" isLive={isLive} />
+                <StationCard index={wheelTransition.leaving} position="leaving" />
+                <StationCard index={wheelTransition.origin} position="origin" />
+                <StationCard index={wheelTransition.destination} position="destination" />
               </>
             ) : (
               <>
-                <StationCard index={origin} position="origin" isLive={isLive} />
-                <StationCard index={destination} position="destination" isLive={isLive} />
+                <StationCard index={origin} position="origin" />
+                <StationCard index={destination} position="destination" />
               </>
             )}
           </div>
           <div className={`rail-connector${isLive ? "" : " demo-connector"}`} role="progressbar" aria-label={isLive ? "Estimated section progress" : "Animated demo section progress"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progressFraction * 100)} aria-valuetext={progressDescription}>
             <div className="rail-track" aria-hidden="true" />
             <div className="rail-complete" aria-hidden="true" style={connectorStyle} />
+            <div className="rail-endpoint rail-endpoint-start" aria-hidden="true" />
+            <div className={`rail-endpoint rail-endpoint-end${progressFraction >= .99 ? " is-complete" : ""}`} aria-hidden="true" />
             <div className="rail-marker" aria-hidden="true" style={connectorStyle}><span>{Math.round(progressFraction * 100)}%</span></div>
           </div>
         </section>
         <MarketPanel serviceRunning={serviceRunning} />
+      </div>
         <footer className="footer-note" id="journey-note">
           {isLive ? <p><span className={`connection connection-${connection}`} aria-hidden="true" />{statusLabel} · {serviceLabel} · {trainLabel}. Progress is a section estimate, not GPS. Questions: {appContact}.</p> : <p>Demo mode · section progress is visual only.</p>}
-          {isLive && snapshot.trains.length > 1 && (
-            <label className="train-picker">
-              <span>Selected live train</span>
-              <select value={activeTrain?.id ?? ""} onChange={(event) => selectTrain(event.target.value)}>
-                {snapshot.trains.map((train) => <option key={train.id} value={train.id}>{train.train_number} · {stationName(train.from_station)} → {stationName(train.to_station)}</option>)}
-              </select>
-            </label>
-          )}
         </footer>
-      </div>
       </div>
     </main>
   );
 }
 
-function StationCard({ index, position, isLive }: { index: number; position: "leaving" | "origin" | "destination"; isLive: boolean }) {
+function StationCard({ index, position }: { index: number; position: "leaving" | "origin" | "destination" }) {
   const isOrigin = position === "origin";
   const headingId = isOrigin ? "origin-station" : position === "destination" ? "destination-station" : undefined;
-  const overline = position === "leaving" ? "Leaving" : isLive ? (isOrigin ? "Section origin" : "Section destination") : (isOrigin ? "From" : "To");
   return (
     <section className={`station-card wheel-card wheel-card-${position}`} aria-hidden={position === "leaving" || undefined} aria-labelledby={headingId}>
-      <p className="station-overline">{overline}</p>
       <div className="station-badge" aria-label={`Station code ${stationCodes[index]}`}><span>JY</span><b>{stationCodes[index].slice(2)}</b></div>
       {isOrigin ? <h1 className="station-name" id={headingId}>{stations[index]}</h1> : <h2 className="station-name" id={headingId}>{stations[index]}</h2>}
-      <p className="station-caption">{stationCodes[index]} · {String(index + 1).padStart(2, "0")} / {stations.length}</p>
     </section>
   );
 }

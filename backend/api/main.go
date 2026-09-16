@@ -25,6 +25,13 @@ func odptConsumerKey() string {
 	return defaultODPTConsumerKey
 }
 
+func odptEndpoint() string {
+	if endpoint := strings.TrimSpace(os.Getenv("ODPT_ENDPOINT")); endpoint != "" {
+		return endpoint
+	}
+	return train.DefaultEndpoint
+}
+
 func duration(name string, fallback time.Duration) time.Duration {
 	if raw := os.Getenv(name); raw != "" {
 		if d, err := time.ParseDuration(raw); err == nil {
@@ -46,7 +53,8 @@ func positiveInt(name string, fallback int) int {
 func main() {
 	poller, err := train.NewPoller(train.Config{
 		ConsumerKey:             odptConsumerKey(),
-		Interval:                duration("ODPT_POLL_INTERVAL", 30*time.Second),
+		Endpoint:                odptEndpoint(),
+		Interval:                duration("ODPT_POLL_INTERVAL", 5*time.Second),
 		HTTPTimeout:             duration("ODPT_HTTP_TIMEOUT", 10*time.Second),
 		FallbackSegmentDuration: duration("SEGMENT_FALLBACK_DURATION", 150*time.Second),
 		SegmentHistorySize:      positiveInt("SEGMENT_HISTORY_SIZE", 32),

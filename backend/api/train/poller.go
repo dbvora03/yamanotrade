@@ -71,7 +71,7 @@ func NewPoller(c Config) (*Poller, error) {
 		c.Endpoint = DefaultEndpoint
 	}
 	if c.Interval <= 0 {
-		c.Interval = 30 * time.Second
+		c.Interval = 5 * time.Second
 	}
 	if c.HTTPTimeout <= 0 {
 		c.HTTPTimeout = 10 * time.Second
@@ -129,14 +129,26 @@ func (p *Poller) fetch(ctx context.Context) ([]Train, error) {
 	fetchedAt := p.now().UTC()
 	trains := make([]Train, 0, len(source))
 	for _, item := range source {
+		fromStation := strings.TrimSpace(item.From)
+		toStation := strings.TrimSpace(item.To)
+		if fromStation == "" {
+			continue
+		}
+		positionKind := "section"
+		// JR East reports a train stopped at a station with a null toStation.
+		// Keep that observation so clients do not lose the selected train while
+		// waiting for its next station-to-station section.
+		if toStation == "" {
+			positionKind = "station"
+		}
 		observed := fetchedAt
 		if parsed, err := time.Parse(time.RFC3339, item.Date); err == nil {
 			observed = parsed
 		}
 		trains = append(trains, Train{
 			ID: trainID(item), TrainNumber: strings.TrimSpace(item.Number), Direction: strings.TrimSpace(item.Direction),
-			FromStation: strings.TrimSpace(item.From), ToStation: strings.TrimSpace(item.To), DelaySeconds: item.Delay,
-			ObservedAt: observed, PositionKind: "section",
+			FromStation: fromStation, ToStation: toStation, DelaySeconds: item.Delay,
+			ObservedAt: observed, PositionKind: positionKind,
 		})
 	}
 	return trains, nil
@@ -280,6 +292,9 @@ func (p *Poller) observeTransitionsLocked(trains []Train) []StationConfirmation 
 }
 
 func (p *Poller) progressLocked(train Train) *VisualProgress {
+	if train.PositionKind != "section" {
+		return nil
+	}
 	entered, ok := p.segmentEntered[train.ID]
 	if !ok || entered.segment != newSegmentKey(train.FromStation, train.ToStation, train.Direction) || entered.enteredAt.IsZero() {
 		return nil

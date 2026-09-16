@@ -55,9 +55,9 @@ func TestPollNormalizesODPTAndRetainsLastSuccess(t *testing.T) {
 func TestPollerUsesCanonicalIDAndDeterministicFallback(t *testing.T) {
 	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`[
-			{"@id":"urn:resource","owl:sameAs":"odpt.Train:JR-East.Yamanote.1234G","odpt:trainNumber":"1234G","odpt:railDirection":"inner"},
-			{"@id":"urn:resource-only","odpt:trainNumber":"2345G"},
-			{"odpt:trainNumber":"3456G","odpt:railDirection":"outer"}
+			{"@id":"urn:resource","owl:sameAs":"odpt.Train:JR-East.Yamanote.1234G","odpt:trainNumber":"1234G","odpt:railDirection":"inner","odpt:fromStation":"station-a","odpt:toStation":"station-b"},
+			{"@id":"urn:resource-only","odpt:trainNumber":"2345G","odpt:fromStation":"station-b","odpt:toStation":"station-c"},
+			{"odpt:trainNumber":"3456G","odpt:railDirection":"outer","odpt:fromStation":"station-c","odpt:toStation":"station-d"}
 		]`))
 	}))
 	defer source.Close()
@@ -77,6 +77,31 @@ func TestPollerUsesCanonicalIDAndDeterministicFallback(t *testing.T) {
 	}
 	if got := trains[2].ID; !strings.HasPrefix(got, "odpt:Train:fallback:") {
 		t.Fatalf("fallback ID = %q", got)
+	}
+}
+
+func TestPollKeepsStationObservationsAndSkipsMissingOrigins(t *testing.T) {
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`[
+			{"odpt:trainNumber":"at-station","odpt:fromStation":"station-a","odpt:toStation":null},
+			{"odpt:trainNumber":"missing-origin","odpt:fromStation":null,"odpt:toStation":"station-b"},
+			{"odpt:trainNumber":"between-stations","odpt:fromStation":"station-a","odpt:toStation":"station-b"}
+		]`))
+	}))
+	defer source.Close()
+	p, err := NewPoller(Config{ConsumerKey: "test-key", Endpoint: source.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Poll(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	trains := p.Snapshot().Trains
+	if len(trains) != 2 || trains[0].TrainNumber != "at-station" || trains[0].PositionKind != "station" || trains[0].ToStation != "" {
+		t.Fatalf("unexpected station observation: %+v", trains)
+	}
+	if trains[0].Progress != nil || trains[1].TrainNumber != "between-stations" || trains[1].PositionKind != "section" {
+		t.Fatalf("unexpected trains: %+v", trains)
 	}
 }
 
@@ -146,5 +171,15 @@ func TestPollDoesNotFollowRedirectWithConsumerKey(t *testing.T) {
 func TestNewPollerRequiresKey(t *testing.T) {
 	if _, err := NewPoller(Config{}); err == nil {
 		t.Fatal("expected missing key error")
+	}
+}
+
+func TestNewPollerDefaultsToFiveSecondInterval(t *testing.T) {
+	p, err := NewPoller(Config{ConsumerKey: "test-key"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.config.Interval != 5*time.Second {
+		t.Fatalf("interval = %s", p.config.Interval)
 	}
 }
