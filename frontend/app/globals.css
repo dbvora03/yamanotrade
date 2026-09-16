@@ -51,6 +51,7 @@ button:focus-visible, select:focus-visible {
 .market-status-forfeited { border-color:#e6cccc; color:#8a3e3a; background:#fff7f6; }.market-status-forfeited .market-status-dot { background:#b9534d; box-shadow:0 0 0 3px rgba(185,83,77,.12); }
 
 .station-stage {
+  --station-column-width:38%;
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -83,7 +84,7 @@ button:focus-visible, select:focus-visible {
 }
 .wheel-card {
   position: absolute;
-  width:38%;
+  width:var(--station-column-width);
   height:100%;
 }
 .wheel-card-origin, .wheel-card-leaving { left:0; }
@@ -125,7 +126,8 @@ button:focus-visible, select:focus-visible {
   position: relative;
   z-index: 2;
   align-self:center;
-  width:100%;
+  width:calc(100% - var(--station-column-width));
+  margin-inline:auto;
   height:48px;
   pointer-events:none;
 }
@@ -160,8 +162,8 @@ button:focus-visible, select:focus-visible {
   transform:translateY(-50%);
   box-shadow:0 0 0 1px rgba(21,23,22,.08);
 }
-.rail-endpoint-start { left:-1px; background:var(--green); }
-.rail-endpoint-end { right:-1px; background:#4b4e4a; transition:background 180ms ease; }
+.rail-endpoint-start { left:0; transform:translate(-50%, -50%); background:var(--green); }
+.rail-endpoint-end { right:0; transform:translate(50%, -50%); background:#4b4e4a; transition:background 180ms ease; }
 .rail-endpoint-end.is-complete { background:var(--green); }
 .rail-marker {
   position: absolute;
