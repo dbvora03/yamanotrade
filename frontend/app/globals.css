@@ -90,17 +90,18 @@ button:focus-visible, select:focus-visible {
 
 .station-badge {
   display: inline-grid;
-  width: 48px;
-  height: 48px;
+  grid-template-rows:auto auto;
+  width: 68px;
+  height: 68px;
   place-content: center;
-  margin-bottom: 15px;
-  border: 4px solid var(--green);
-  border-radius: 10px;
-  color: var(--green-deep);
-  line-height: .86;
+  margin-bottom: 17px;
+  border: 5px solid var(--green);
+  border-radius: 14px;
+  color: var(--ink);
+  line-height: 1;
 }
-.station-badge span { font-size: 11px; font-weight: 800; letter-spacing: .08em; }
-.station-badge b { margin-top: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; letter-spacing: .04em; }
+.station-badge span { font-size: 15px; font-weight: 800; letter-spacing: .06em; }
+.station-badge b { margin-top: 1px; font-family: var(--font-space-grotesk), Arial, Helvetica, sans-serif; font-size: 32px; font-weight: 500; letter-spacing: -.06em; line-height: .82; }
 .station-name {
   margin: 0;
   color: var(--ink);
@@ -222,7 +223,9 @@ button:focus-visible, select:focus-visible {
     min-height:190px;
   }
   .station-card { min-height:190px; padding:14px 6px; }
-  .station-badge { width:38px; height:38px; margin-bottom:10px; }
+  .station-badge { width:54px; height:54px; margin-bottom:11px; border-width:4px; border-radius:11px; }
+  .station-badge span { font-size:12px; }
+  .station-badge b { font-size:25px; }
   .station-name { font-size:clamp(24px, 8.8vw, 38px); }
   .station-caption { margin-top:10px; font-size:10px; }
   .footer-note, .train-picker, .train-picker select { font-size: 12px; }
