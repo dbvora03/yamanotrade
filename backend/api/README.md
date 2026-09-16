@@ -17,7 +17,14 @@ export CORS_ALLOWED_ORIGINS='http://localhost:5173'
 go run .
 ```
 
-The service includes a committed public ODPT consumer key, so no key is required for a standard run. To use your own key, obtain one from [developer.odpt.org](https://developer.odpt.org/) and set `ODPT_CONSUMER_KEY` before starting the service.
+The service includes a committed public ODPT consumer key, so no key is required for datasets available through the standard endpoint. JR East's Challenge 2026 feed requires a Challenge access token and endpoint; keep the token out of source control and run with:
+
+```sh
+export ODPT_ENDPOINT='https://api-challenge.odpt.org/api/v4/odpt:Train'
+export ODPT_CONSUMER_KEY='<Challenge 2026 access token>'
+export CORS_ALLOWED_ORIGINS='http://localhost:3000'
+go run .
+```
 
 The server listens on `:8080` by default. Try it:
 
@@ -32,13 +39,13 @@ The SSE endpoint atomically subscribes a client before it sends the initial `eve
 
 ## Environment
 
-`ODPT_CONSUMER_KEY` is optional and overrides the committed public default when non-empty. `ODPT_POLL_INTERVAL` defaults to `30s`, `ODPT_HTTP_TIMEOUT` to `10s`, `SEGMENT_FALLBACK_DURATION` to `150s`, `SEGMENT_HISTORY_SIZE` to `32`, `LISTEN_ADDR` to `:8080`, and `CORS_ALLOWED_ORIGINS` to `*`. The latter accepts a comma-separated origin list for development. See [`../../.env.example`](../../.env.example). The fallback duration controls only visual progress before provider-observed section transitions have accumulated; history size bounds retained inferred durations per directed section.
+`ODPT_CONSUMER_KEY` is optional and overrides the committed public default when non-empty. `ODPT_ENDPOINT` defaults to `https://api.odpt.org/api/v4/odpt:Train` and can select an authorized compatible ODPT endpoint. `ODPT_POLL_INTERVAL` defaults to `30s`, `ODPT_HTTP_TIMEOUT` to `10s`, `SEGMENT_FALLBACK_DURATION` to `150s`, `SEGMENT_HISTORY_SIZE` to `32`, `LISTEN_ADDR` to `:8080`, and `CORS_ALLOWED_ORIGINS` to `*`. The latter accepts a comma-separated origin list for development. See [`../../.env.example`](../../.env.example). The fallback duration controls only visual progress before provider-observed section transitions have accumulated; history size bounds retained inferred durations per directed section.
 
 Failed polls retain the last successful snapshot and surface `stale`, `age_seconds`, and `last_error`; diagnostic errors are intentionally sanitized and never contain the consumer key. Retries use capped exponential backoff with small jitter. The process handles SIGINT/SIGTERM and shuts HTTP down gracefully.
 
 ## API shape
 
-`GET /api/v1/trains` returns a snapshot with `trains`, `generated_at`, `stale`, `age_seconds`, and optional `last_error`. `generated_at` is the API's successful-poll time; each train's `observed_at` is ODPT's `dc:date` when present (otherwise the poll time). A train always includes `id`, `train_number`, `direction`, `from_station`, `to_station`, `delay_seconds`, `observed_at`, and `position_kind` (`"section"`). `id` prefers ODPT's `owl:sameAs`, then `@id`, with a deterministic fallback for incomplete upstream records. A service with no successful data responds `503` but still returns the diagnostic snapshot. `/healthz` uses matching freshness fields plus `status` (`ok`, `stale`, or `unavailable`). All endpoints accept `GET`; unsupported methods return JSON `405` with `Allow: GET, OPTIONS`.
+`GET /api/v1/trains` returns a snapshot with `trains`, `generated_at`, `stale`, `age_seconds`, and optional `last_error`. `generated_at` is the API's successful-poll time; each train's `observed_at` is ODPT's `dc:date` when present (otherwise the poll time). A train always includes `id`, `train_number`, `direction`, `from_station`, `to_station`, `delay_seconds`, `observed_at`, and `position_kind` (`"section"`). Provider records without both endpoints (for example, a train currently reported at a station with `toStation: null`) are omitted until they describe a complete section. `id` prefers ODPT's `owl:sameAs`, then `@id`, with a deterministic fallback for incomplete upstream records. A service with no successful data responds `503` but still returns the diagnostic snapshot. `/healthz` uses matching freshness fields plus `status` (`ok`, `stale`, or `unavailable`). All endpoints accept `GET`; unsupported methods return JSON `405` with `Allow: GET, OPTIONS`.
 
 `GET /api/v1/service-status` always returns `200` and this contract: `running` (boolean), `status`, `reason`, `observed_at` (omitted unless live observations establish activity), optional `resumes_at` (RFC3339), `generated_at`, `source`, and `confidence`. `status: "active"` / `running: true` means a fresh non-empty ODPT `odpt:Train` snapshot was observed (`reason: "live_train_observations"`, high confidence). `scheduled_off_hours` / `running: false` is only the conservative daily 02:00–03:59 JST window (`jst_schedule_heuristic`, medium confidence). Only this status includes `resumes_at`, currently a 04:30 JST heuristic. It is based on the early service shown in [JR East's public Yamanote timetable](https://timetables.jreast.co.jp/2609/timetable-v/630u2p.html), but it is not an exact operating promise: weekday, Saturday/holiday, and special timetables vary. `unknown` means a fresh empty snapshot, and `degraded` means no usable/fresh snapshot or a poll error; both set `running: false` for a safe inactive display but **do not confirm a suspension or disruption**, and intentionally omit `resumes_at`. Their reasons make that distinction explicit. The response contains no ODPT consumer key or upstream URL.
 

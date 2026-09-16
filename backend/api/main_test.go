@@ -14,6 +14,18 @@ func TestODPTConsumerKeyUsesDefaultAndEnvironmentOverride(t *testing.T) {
 	}
 }
 
+func TestODPTEndpointUsesDefaultAndEnvironmentOverride(t *testing.T) {
+	t.Setenv("ODPT_ENDPOINT", "")
+	if got := odptEndpoint(); got != "https://api.odpt.org/api/v4/odpt:Train" {
+		t.Fatalf("default endpoint = %q", got)
+	}
+
+	t.Setenv("ODPT_ENDPOINT", " https://api-challenge.odpt.org/api/v4/odpt:Train ")
+	if got := odptEndpoint(); got != "https://api-challenge.odpt.org/api/v4/odpt:Train" {
+		t.Fatalf("override endpoint = %q", got)
+	}
+}
+
 func TestPositiveInt(t *testing.T) {
 	t.Setenv("TEST_POSITIVE_INT", "12")
 	if got := positiveInt("TEST_POSITIVE_INT", 4); got != 12 {

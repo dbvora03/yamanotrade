@@ -129,13 +129,21 @@ func (p *Poller) fetch(ctx context.Context) ([]Train, error) {
 	fetchedAt := p.now().UTC()
 	trains := make([]Train, 0, len(source))
 	for _, item := range source {
+		fromStation := strings.TrimSpace(item.From)
+		toStation := strings.TrimSpace(item.To)
+		// JR East reports trains stopped at a station with a null toStation.
+		// This API exposes station-to-station sections, so wait for the next
+		// provider observation instead of publishing an invalid section.
+		if fromStation == "" || toStation == "" {
+			continue
+		}
 		observed := fetchedAt
 		if parsed, err := time.Parse(time.RFC3339, item.Date); err == nil {
 			observed = parsed
 		}
 		trains = append(trains, Train{
 			ID: trainID(item), TrainNumber: strings.TrimSpace(item.Number), Direction: strings.TrimSpace(item.Direction),
-			FromStation: strings.TrimSpace(item.From), ToStation: strings.TrimSpace(item.To), DelaySeconds: item.Delay,
+			FromStation: fromStation, ToStation: toStation, DelaySeconds: item.Delay,
 			ObservedAt: observed, PositionKind: "section",
 		})
 	}

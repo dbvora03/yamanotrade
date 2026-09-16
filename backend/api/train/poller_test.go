@@ -55,9 +55,9 @@ func TestPollNormalizesODPTAndRetainsLastSuccess(t *testing.T) {
 func TestPollerUsesCanonicalIDAndDeterministicFallback(t *testing.T) {
 	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`[
-			{"@id":"urn:resource","owl:sameAs":"odpt.Train:JR-East.Yamanote.1234G","odpt:trainNumber":"1234G","odpt:railDirection":"inner"},
-			{"@id":"urn:resource-only","odpt:trainNumber":"2345G"},
-			{"odpt:trainNumber":"3456G","odpt:railDirection":"outer"}
+			{"@id":"urn:resource","owl:sameAs":"odpt.Train:JR-East.Yamanote.1234G","odpt:trainNumber":"1234G","odpt:railDirection":"inner","odpt:fromStation":"station-a","odpt:toStation":"station-b"},
+			{"@id":"urn:resource-only","odpt:trainNumber":"2345G","odpt:fromStation":"station-b","odpt:toStation":"station-c"},
+			{"odpt:trainNumber":"3456G","odpt:railDirection":"outer","odpt:fromStation":"station-c","odpt:toStation":"station-d"}
 		]`))
 	}))
 	defer source.Close()
@@ -77,6 +77,28 @@ func TestPollerUsesCanonicalIDAndDeterministicFallback(t *testing.T) {
 	}
 	if got := trains[2].ID; !strings.HasPrefix(got, "odpt:Train:fallback:") {
 		t.Fatalf("fallback ID = %q", got)
+	}
+}
+
+func TestPollSkipsRecordsWithoutACompleteSection(t *testing.T) {
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`[
+			{"odpt:trainNumber":"at-station","odpt:fromStation":"station-a","odpt:toStation":null},
+			{"odpt:trainNumber":"missing-origin","odpt:fromStation":null,"odpt:toStation":"station-b"},
+			{"odpt:trainNumber":"between-stations","odpt:fromStation":"station-a","odpt:toStation":"station-b"}
+		]`))
+	}))
+	defer source.Close()
+	p, err := NewPoller(Config{ConsumerKey: "test-key", Endpoint: source.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Poll(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	trains := p.Snapshot().Trains
+	if len(trains) != 1 || trains[0].TrainNumber != "between-stations" {
+		t.Fatalf("unexpected trains: %+v", trains)
 	}
 }
 
