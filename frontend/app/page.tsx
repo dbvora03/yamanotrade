@@ -375,8 +375,8 @@ export default function Home() {
         <section className="station-stage" aria-label="Yamanote loop station explorer">
           {isLive && snapshot.trains.length > 1 && (
             <>
-              <button type="button" className="station-nav station-nav-previous" aria-label="Select previous live train" onClick={() => selectAdjacentTrain(-1)}>←</button>
-              <button type="button" className="station-nav station-nav-next" aria-label="Select next live train" onClick={() => selectAdjacentTrain(1)}>→</button>
+              <button type="button" className="station-nav station-nav-previous" aria-label="Select previous live train" onClick={() => selectAdjacentTrain(-1)}><span aria-hidden="true" /></button>
+              <button type="button" className="station-nav station-nav-next" aria-label="Select next live train" onClick={() => selectAdjacentTrain(1)}><span aria-hidden="true" /></button>
             </>
           )}
           <div className={`station-wheel${wheelTransition ? " station-wheel-moving" : ""}`} aria-live="polite">
