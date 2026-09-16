@@ -72,10 +72,12 @@ button:focus-visible, select:focus-visible {
 
 .station-card {
   display: grid;
-  align-content: center;
+  grid-template-rows:68px 92px;
+  align-content: start;
   justify-items: center;
+  gap:14px;
   min-height: 190px;
-  padding:12px;
+  padding:6px 12px;
   border:0;
   background:transparent;
 }
@@ -96,7 +98,7 @@ button:focus-visible, select:focus-visible {
   width: 68px;
   height: 68px;
   place-content: center;
-  margin-bottom: 17px;
+  margin-bottom: 0;
   border: 5px solid var(--green);
   border-radius: 14px;
   color: var(--ink);
@@ -105,6 +107,10 @@ button:focus-visible, select:focus-visible {
 .station-badge span { font-size: 15px; font-weight: 800; letter-spacing: .06em; }
 .station-badge b { margin-top: 1px; font-family: var(--font-space-grotesk), Arial, Helvetica, sans-serif; font-size: 32px; font-weight: 500; letter-spacing: -.06em; line-height: .82; }
 .station-name {
+  display:flex;
+  width:100%;
+  align-items:flex-start;
+  justify-content:center;
   margin: 0;
   color: var(--ink);
   font-family: var(--font-space-grotesk), Arial, Helvetica, sans-serif;
@@ -217,8 +223,8 @@ button:focus-visible, select:focus-visible {
     min-height:204px;
     gap:10px;
   }
-  .station-card { min-height:150px; padding:10px 6px; }
-  .station-badge { width:54px; height:54px; margin-bottom:11px; border-width:4px; border-radius:11px; }
+  .station-card { grid-template-rows:54px 60px; gap:10px; min-height:150px; padding:5px 6px; }
+  .station-badge { width:54px; height:54px; margin-bottom:0; border-width:4px; border-radius:11px; }
   .station-badge span { font-size:12px; }
   .station-badge b { font-size:25px; }
   .station-name { font-size:clamp(21px, 7vw, 32px); }
