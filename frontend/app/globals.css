@@ -53,18 +53,20 @@ button:focus-visible, select:focus-visible {
 .station-stage {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(130px, .56fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 190px 48px;
+  gap: 10px;
   width:100%;
-  min-height: 230px;
+  min-height: 248px;
   margin: 0 auto;
   padding: 0;
   text-align: center;
 }
 
 .station-wheel {
-  position: absolute;
+  position: relative;
   z-index: 1;
-  inset: 0;
+  grid-row: 1;
   overflow: hidden;
 }
 
@@ -72,7 +74,7 @@ button:focus-visible, select:focus-visible {
   display: grid;
   align-content: center;
   justify-items: center;
-  min-height: 230px;
+  min-height: 190px;
   padding:12px;
   border:0;
   background:transparent;
@@ -106,22 +108,14 @@ button:focus-visible, select:focus-visible {
   margin: 0;
   color: var(--ink);
   font-family: var(--font-space-grotesk), Arial, Helvetica, sans-serif;
-  font-size: clamp(30px, 5.7vw, 60px);
+  font-size: clamp(26px, 4.7vw, 48px);
   font-weight: 500;
   letter-spacing: -.06em;
   line-height: .9;
 }
-.station-caption {
-  margin: 16px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-}
-
 .rail-connector {
-  grid-column:2;
+  grid-column:1;
+  grid-row:2;
   position: relative;
   z-index: 2;
   align-self:center;
@@ -219,15 +213,15 @@ button:focus-visible, select:focus-visible {
 
 @media (max-width: 520px) {
   .station-stage {
-    grid-template-columns:minmax(0, 1fr) minmax(72px, .5fr) minmax(0, 1fr);
-    min-height:190px;
+    grid-template-rows:150px 44px;
+    min-height:204px;
+    gap:10px;
   }
-  .station-card { min-height:190px; padding:14px 6px; }
+  .station-card { min-height:150px; padding:10px 6px; }
   .station-badge { width:54px; height:54px; margin-bottom:11px; border-width:4px; border-radius:11px; }
   .station-badge span { font-size:12px; }
   .station-badge b { font-size:25px; }
-  .station-name { font-size:clamp(24px, 8.8vw, 38px); }
-  .station-caption { margin-top:10px; font-size:10px; }
+  .station-name { font-size:clamp(21px, 7vw, 32px); }
   .footer-note, .train-picker, .train-picker select { font-size: 12px; }
   .footer-note { padding-right: 16px; padding-left: 16px; }
 }

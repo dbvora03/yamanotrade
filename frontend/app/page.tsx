@@ -415,7 +415,6 @@ function StationCard({ index, position }: { index: number; position: "leaving" |
     <section className={`station-card wheel-card wheel-card-${position}`} aria-hidden={position === "leaving" || undefined} aria-labelledby={headingId}>
       <div className="station-badge" aria-label={`Station code ${stationCodes[index]}`}><span>JY</span><b>{stationCodes[index].slice(2)}</b></div>
       {isOrigin ? <h1 className="station-name" id={headingId}>{stations[index]}</h1> : <h2 className="station-name" id={headingId}>{stations[index]}</h2>}
-      <p className="station-caption">{stationCodes[index]} · {String(index + 1).padStart(2, "0")} / {stations.length}</p>
     </section>
   );
 }
