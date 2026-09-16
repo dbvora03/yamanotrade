@@ -9,7 +9,7 @@
 }
 
 .guess-panel { align-self:start; width:100%; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; }
-.guess-toolbar { display:flex; justify-content:flex-start; margin-bottom:20px; }
+.guess-toolbar { position:absolute; z-index:3; top:26px; right:0; display:flex; justify-content:flex-end; margin:0; }
 .market-overline { margin:0 0 16px; color:#42463f; font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
 .amount-label,.range-heading { display:flex; justify-content:space-between; gap:12px; color:#42463f; font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }.amount-label span { color:var(--green-deep); letter-spacing:0; text-transform:none; }
 .amount-box { display:grid; grid-template-columns:1fr auto; gap:0 10px; margin-top:8px; padding:8px 10px 0; border:1px solid #bec4b8; border-radius:8px; background:#fbfbf8; }.amount-box:focus-within { border-color:var(--green-deep); box-shadow:0 0 0 2px rgba(50,205,102,.22); }.amount-box input { min-width:0; border:0; outline:0; background:transparent; color:var(--ink); font:600 24px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; }.amount-box > span { padding-top:5px; color:var(--muted); font-size:14px; font-weight:700; }.quick-sizes { grid-column:1 / -1; display:grid; grid-template-columns:repeat(5,1fr); margin:11px -10px 0; border-top:1px solid #e1e3dd; }.quick-sizes button { border:0; border-right:1px solid #e1e3dd; padding:8px 3px; background:transparent; color:#454940; font-size:11px; font-weight:700; }.quick-sizes button:last-child { border-right:0; }.quick-sizes button:hover { background:#e9faef; color:var(--green-deep); }.amount-help,.guess-feedback { min-height:18px; margin:7px 0 24px; color:var(--muted); font-size:12px; line-height:1.4; }.amount-help.is-error { color:#b0443c; }
@@ -41,7 +41,7 @@ button:focus-visible, select:focus-visible {
 .journey {
   min-height: 100svh;
 }
-.journey-layout { width:min(100% - 48px, 980px); min-height:100svh; margin:0 auto; padding:26px 0 34px; }
+.journey-layout { position:relative; width:min(100% - 48px, 980px); min-height:100svh; margin:0 auto; padding:26px 0 34px; }
 .rail-experience { display:grid; gap:22px; min-width:0; }
 .journey-status { display:grid; justify-items:center; gap:10px; }
 .journey-layout .guess-panel { margin:0; }
@@ -236,4 +236,4 @@ button:focus-visible, select:focus-visible {
   .footer-note, .train-picker, .train-picker select { font-size: 12px; }
   .footer-note { padding-right: 16px; padding-left: 16px; }
 }
-@media (max-width: 520px) { .journey-layout { width:min(100% - 24px, 980px); padding:16px 0 24px; }.service-status-banner { gap:5px; padding:7px 9px; } }
+@media (max-width: 520px) { .journey-layout { width:min(100% - 24px, 980px); padding:16px 0 24px; }.guess-toolbar { top:16px; }.service-status-banner { gap:5px; padding:7px 9px; } }
