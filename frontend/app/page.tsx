@@ -371,14 +371,14 @@ export default function Home() {
           <div className={`station-wheel${wheelTransition ? " station-wheel-moving" : ""}`} aria-live="polite">
             {wheelTransition ? (
               <>
-                <StationCard index={wheelTransition.leaving} position="leaving" isLive={isLive} />
-                <StationCard index={wheelTransition.origin} position="origin" isLive={isLive} />
-                <StationCard index={wheelTransition.destination} position="destination" isLive={isLive} />
+                <StationCard index={wheelTransition.leaving} position="leaving" />
+                <StationCard index={wheelTransition.origin} position="origin" />
+                <StationCard index={wheelTransition.destination} position="destination" />
               </>
             ) : (
               <>
-                <StationCard index={origin} position="origin" isLive={isLive} />
-                <StationCard index={destination} position="destination" isLive={isLive} />
+                <StationCard index={origin} position="origin" />
+                <StationCard index={destination} position="destination" />
               </>
             )}
           </div>
@@ -406,13 +406,11 @@ export default function Home() {
   );
 }
 
-function StationCard({ index, position, isLive }: { index: number; position: "leaving" | "origin" | "destination"; isLive: boolean }) {
+function StationCard({ index, position }: { index: number; position: "leaving" | "origin" | "destination" }) {
   const isOrigin = position === "origin";
   const headingId = isOrigin ? "origin-station" : position === "destination" ? "destination-station" : undefined;
-  const overline = position === "leaving" ? "Leaving" : isLive ? (isOrigin ? "Section origin" : "Section destination") : (isOrigin ? "From" : "To");
   return (
     <section className={`station-card wheel-card wheel-card-${position}`} aria-hidden={position === "leaving" || undefined} aria-labelledby={headingId}>
-      <p className="station-overline">{overline}</p>
       <div className="station-badge" aria-label={`Station code ${stationCodes[index]}`}><span>JY</span><b>{stationCodes[index].slice(2)}</b></div>
       {isOrigin ? <h1 className="station-name" id={headingId}>{stations[index]}</h1> : <h2 className="station-name" id={headingId}>{stations[index]}</h2>}
       <p className="station-caption">{stationCodes[index]} · {String(index + 1).padStart(2, "0")} / {stations.length}</p>
