@@ -1,0 +1,29 @@
+services:
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - indexer-mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  indexer:
+    build:
+      context: ./indexer
+    environment:
+      ETH_RPC_URL: ${ETH_RPC_URL:?ETH_RPC_URL must be set}
+      CONTRACT_ADDRESS: ${CONTRACT_ADDRESS:?CONTRACT_ADDRESS must be set}
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DATABASE: yamanotrade
+      START_BLOCK: ${START_BLOCK:-}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  indexer-mongo-data:
