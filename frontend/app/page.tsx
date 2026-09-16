@@ -273,6 +273,13 @@ export default function Home() {
     () => snapshot.trains.find((train) => train.id === selectedTrainId) ?? snapshot.trains[0],
     [selectedTrainId, snapshot.trains]
   );
+  const routeOrderedTrains = useMemo(
+    () => [...snapshot.trains].sort((left, right) => {
+      const stationDifference = stationIndex(left.from_station) - stationIndex(right.from_station);
+      return stationDifference || left.train_number.localeCompare(right.train_number);
+    }),
+    [snapshot.trains]
+  );
 
   const isLive = liveMode && Boolean(apiBase);
   const serviceRunning = !isLive || serviceStatus.running;
@@ -286,6 +293,25 @@ export default function Home() {
       ? transitionProgress.fraction
       : activeTrain?.progress?.estimated_fraction ?? 0))
     : demoFraction;
+  const selectTrain = (trainId: string) => {
+    const train = snapshot.trains.find((item) => item.id === trainId);
+    if (!train) return;
+    selectedTrainIdRef.current = trainId;
+    setSelectedTrainId(trainId);
+    setTransitionProgress(null);
+    const segment = segmentForObservation(train.from_station, train.to_station, train.direction);
+    if (!segment) return;
+    setIndex(segment.origin);
+    visibleSegmentRef.current = segment;
+    setVisibleSegment(segment);
+    setWheelTransition(null);
+  };
+  const selectAdjacentTrain = (offset: -1 | 1) => {
+    if (routeOrderedTrains.length < 2) return;
+    const currentIndex = routeOrderedTrains.findIndex((train) => train.id === activeTrain?.id);
+    const nextIndex = ((currentIndex < 0 ? 0 : currentIndex) + offset + routeOrderedTrains.length) % routeOrderedTrains.length;
+    selectTrain(routeOrderedTrains[nextIndex].id);
+  };
   const statusLabel = connection === "demo" ? "Demo mode" : connection === "live" ? "Live section feed" : connection === "connecting" ? "Connecting" : connection === "reconnecting" ? "Reconnecting" : "Feed unavailable";
   const serviceLabel = serviceStatus.status === "active"
     ? "Service running"
@@ -347,6 +373,12 @@ export default function Home() {
           )}
         </header>
         <section className="station-stage" aria-label="Yamanote loop station explorer">
+          {isLive && snapshot.trains.length > 1 && (
+            <>
+              <button type="button" className="station-nav station-nav-previous" aria-label="Select previous live train" onClick={() => selectAdjacentTrain(-1)}>←</button>
+              <button type="button" className="station-nav station-nav-next" aria-label="Select next live train" onClick={() => selectAdjacentTrain(1)}>→</button>
+            </>
+          )}
           <div className={`station-wheel${wheelTransition ? " station-wheel-moving" : ""}`} aria-live="polite">
             {wheelTransition ? (
               <>
