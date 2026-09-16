@@ -11,8 +11,6 @@ const rpcUrl = process.env.NEXT_PUBLIC_ANVIL_RPC_URL ?? "http://127.0.0.1:8545";
 const anvil = { id: 31337, name: "Anvil", nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [rpcUrl] } } } as const;
 const marketAbi = parseAbi([
   "function placeRangeBet(uint256 seriesId, uint256 roundId, uint16 firstBucket, uint16 lastBucket, uint256 amount) returns (uint256)",
-  "function claim(uint256 ticketId) returns (uint256)",
-  "function claimRefund(uint256 ticketId) returns (uint256)",
 ]);
 const seriesId = BigInt(process.env.NEXT_PUBLIC_MARKET_SERIES_ID ?? "1");
 const roundId = BigInt(process.env.NEXT_PUBLIC_MARKET_ROUND_ID ?? "1");
@@ -29,7 +27,6 @@ export function MarketPanel({ serviceRunning }: { serviceRunning: boolean }) {
   const [upper, setUpper] = useState(39);
 	const [feedback, setFeedback] = useState("");
 	const [account, setAccount] = useState<Address>();
-	const [ticketId, setTicketId] = useState("");
   const graph = useRef<HTMLDivElement>(null);
   const dragging = useRef<"lower" | "upper" | null>(null);
   const entered = numberValue(amount);
@@ -66,12 +63,8 @@ export function MarketPanel({ serviceRunning }: { serviceRunning: boolean }) {
 			await client.waitForTransactionReceipt({ hash: await wallet.writeContract({ address: usdcAddress, abi: erc20Abi, functionName: "approve", args: [marketAddress, units] }) });
 			setFeedback("Placing non-transferable range ticket…");
 			await client.waitForTransactionReceipt({ hash: await wallet.writeContract({ address: marketAddress, abi: marketAbi, functionName: "placeRangeBet", args: [seriesId, roundId, lower, upper, units] }) });
-			setFeedback("Ticket placed. It cannot be sold; claim only after settlement.");
+			setFeedback("Ticket placed.");
 		} catch (error) { setFeedback(error instanceof Error ? error.message : "Transaction failed."); }
-	};
-	const claim = async (refund: boolean) => {
-		if (!marketAddress || !window.ethereum || !account || !/^\d+$/.test(ticketId)) { setFeedback("Enter a ticket ID and connect an Anvil wallet."); return; }
-		try { const wallet = createWalletClient({ account, chain: anvil, transport: custom(window.ethereum) }); const client = createPublicClient({ chain: anvil, transport: http(rpcUrl) }); const hash = await wallet.writeContract({ address: marketAddress, abi: marketAbi, functionName: refund ? "claimRefund" : "claim", args: [BigInt(ticketId)] }); await client.waitForTransactionReceipt({ hash }); setFeedback(refund ? "Refund claimed." : "Winning payout claimed."); } catch (error) { setFeedback(error instanceof Error ? error.message : "Claim failed."); }
 	};
   const graphStyle = { "--range-start": `${lower / (ticks - 1) * 100}%`, "--range-end": `${upper / (ticks - 1) * 100}%` } as CSSProperties & Record<"--range-start" | "--range-end", string>;
   return <aside className="guess-panel" aria-label="Arrival range market">
@@ -82,7 +75,7 @@ export function MarketPanel({ serviceRunning }: { serviceRunning: boolean }) {
     <div className="range-heading"><span>Arrival range</span><span>{upper - lower + 1} ticks</span></div>
     <div className="range-chart" ref={graph} style={graphStyle} onPointerMove={pointerMove} onPointerUp={() => { dragging.current = null; }} onPointerCancel={() => { dragging.current = null; }}><div className="range-selection" aria-hidden="true" /><div className="current-marker" aria-label="Current estimate"><span>Estimated</span></div><div className="range-bars" aria-hidden="true">{bars.map((height, index) => <span key={index} className={index >= lower && index <= upper ? "is-selected" : ""} style={{ height }} />)}</div><div className="range-handle" style={{ left: `calc(${lower / (ticks - 1) * 100}% - 8px)` }} onPointerDown={(event) => pointerDown(event, "lower")}><button type="button" role="slider" aria-label="Range start" aria-valuemin={0} aria-valuemax={ticks - 1} aria-valuenow={lower} aria-valuetext={label(lower)} onKeyDown={(event) => keyMove(event, "lower")} /><span className="range-handle-label">{label(lower)}</span></div><div className="range-handle" style={{ left: `calc(${upper / (ticks - 1) * 100}% - 8px)` }} onPointerDown={(event) => pointerDown(event, "upper")}><button type="button" role="slider" aria-label="Range end" aria-valuemin={0} aria-valuemax={ticks - 1} aria-valuenow={upper} aria-valuetext={label(upper)} onKeyDown={(event) => keyMove(event, "upper")} /><span className="range-handle-label">{label(upper)}</span></div></div>
     <div className="range-labels"><span>Min {label(0)}</span><span>Max {label(ticks - 1)}</span></div>
-	<button type="button" className="place-guess" disabled={!serviceRunning || !valid} onClick={() => void place()}>Approve & place range ticket</button><p className="guess-feedback" aria-live="polite">{feedback || "Claims are pull-based after the oracle settles or refunds the round."}</p>
-	<div className="claim-controls"><input aria-label="Ticket ID" inputMode="numeric" placeholder="Ticket ID" value={ticketId} onChange={(event) => setTicketId(event.target.value)} /><button type="button" onClick={() => void claim(false)}>Claim winner</button><button type="button" onClick={() => void claim(true)}>Claim refund</button></div>
+	<button type="button" className="place-guess" disabled={!serviceRunning || !valid} onClick={() => void place()}>Approve & place range ticket</button>
+	{feedback && <p className="guess-feedback" aria-live="polite">{feedback}</p>}
   </aside>;
 }

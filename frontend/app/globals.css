@@ -35,12 +35,11 @@ button:focus-visible, select:focus-visible {
 
 .wallet-connect { margin:0; padding:8px 13px; border:0; border-radius:999px; background:var(--green); color:#fff; font-size:12px; font-weight:800; letter-spacing:.03em; }
 .wallet-connect:hover { background:var(--green); }
-.claim-controls { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }.claim-controls input { width: 110px; padding: 8px; border: 1px solid var(--rail-neutral); }.claim-controls button { padding: 8px 10px; border: 1px solid var(--ink); background: transparent; color: inherit; font-weight: 700; }
 
 .journey {
   min-height: 100svh;
 }
-.journey-layout { position:relative; width:min(100% - 48px, 980px); min-height:100svh; margin:0 auto; padding:26px 0 34px; }
+.journey-layout { position:relative; display:flex; flex-direction:column; width:min(100% - 48px, 980px); min-height:100svh; margin:0 auto; padding:26px 0 34px; }
 .rail-experience { display:grid; gap:22px; min-width:0; }
 .journey-status { display:grid; justify-items:center; gap:10px; }
 .journey-layout .guess-panel { margin:0 auto; }
@@ -197,8 +196,8 @@ button:focus-visible, select:focus-visible {
 
 .footer-note {
   width: min(100%, 700px);
-  margin: 0 auto;
-  padding: 0 24px 21px;
+  margin: auto auto 0;
+  padding: 32px 24px 0;
   color: #767a72;
   font-size: 12px;
   line-height: 1.45;
@@ -209,8 +208,6 @@ button:focus-visible, select:focus-visible {
 .connection-live, .connection-demo { background: var(--green); }
 .connection-connecting, .connection-reconnecting { background: #dfae50; }
 .connection-unavailable { background: #d66d67; }
-.train-picker { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; margin-top: 11px; color: #62665e; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-.train-picker select { max-width: 230px; border: 1px solid #d8dad4; border-radius: 4px; padding: 5px 23px 5px 7px; background: #fff; color: #535750; font-size: 12px; text-transform: none; }
 
 @keyframes wheel-to-origin { from { transform:translateX(163%); } to { transform:translateX(0); } }
 @keyframes wheel-to-destination { from { transform:translateX(163%); } to { transform:translateX(0); } }
@@ -232,7 +229,7 @@ button:focus-visible, select:focus-visible {
   .station-badge span { font-size:12px; }
   .station-badge b { font-size:25px; }
   .station-name { font-size:clamp(13px, 4vw, 20px); }
-  .footer-note, .train-picker, .train-picker select { font-size: 12px; }
+  .footer-note { font-size: 12px; }
   .footer-note { padding-right: 16px; padding-left: 16px; }
 }
 @media (max-width: 520px) { .journey-layout { width:min(100% - 24px, 980px); padding:16px 0 24px; }.guess-toolbar { top:16px; right:16px; }.service-status-banner { gap:5px; padding:7px 9px; } }

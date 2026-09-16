@@ -96,13 +96,6 @@ function segmentForObservation(fromStation: string, toStation: string, direction
   return { origin, destination: (origin + step + stations.length) % stations.length };
 }
 
-function trainOptionLabel(train: Train) {
-  const origin = stationName(train.from_station);
-  return train.position_kind === "station" || !train.to_station
-    ? `${train.train_number} · At ${origin}`
-    : `${train.train_number} · ${origin} → ${stationName(train.to_station)}`;
-}
-
 function formattedTime(value?: string) {
   if (!value) return "Waiting for a source update";
   const date = new Date(value);
@@ -293,20 +286,6 @@ export default function Home() {
       ? transitionProgress.fraction
       : activeTrain?.progress?.estimated_fraction ?? 0))
     : demoFraction;
-  const selectTrain = (trainId: string) => {
-    selectedTrainIdRef.current = trainId;
-    setSelectedTrainId(trainId);
-    setTransitionProgress(null);
-    const train = snapshot.trains.find((item) => item.id === trainId);
-    const sectionStart = train ? stationIndex(train.from_station) : -1;
-    const sectionEnd = train ? stationIndex(train.to_station) : -1;
-    if (sectionStart >= 0) setIndex(sectionStart);
-    if (sectionStart >= 0 && sectionEnd >= 0) {
-      const segment = { origin: sectionStart, destination: sectionEnd };
-      visibleSegmentRef.current = segment;
-      setVisibleSegment(segment);
-    }
-  };
   const statusLabel = connection === "demo" ? "Demo mode" : connection === "live" ? "Live section feed" : connection === "connecting" ? "Connecting" : connection === "reconnecting" ? "Reconnecting" : "Feed unavailable";
   const serviceLabel = serviceStatus.status === "active"
     ? "Service running"
@@ -391,18 +370,10 @@ export default function Home() {
           </div>
         </section>
         <MarketPanel serviceRunning={serviceRunning} />
+      </div>
         <footer className="footer-note" id="journey-note">
           {isLive ? <p><span className={`connection connection-${connection}`} aria-hidden="true" />{statusLabel} · {serviceLabel} · {trainLabel}. Progress is a section estimate, not GPS. Questions: {appContact}.</p> : <p>Demo mode · section progress is visual only.</p>}
-          {isLive && snapshot.trains.length > 1 && (
-            <label className="train-picker">
-              <span>Selected live train</span>
-              <select value={activeTrain?.id ?? ""} onChange={(event) => selectTrain(event.target.value)}>
-                {snapshot.trains.map((train) => <option key={train.id} value={train.id}>{trainOptionLabel(train)}</option>)}
-              </select>
-            </label>
-          )}
         </footer>
-      </div>
       </div>
     </main>
   );
