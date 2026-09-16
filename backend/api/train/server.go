@@ -172,10 +172,10 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			if !send("snapshot", snap) {
+			if !sendTransitionEvents(send, previous, snap) {
 				return
 			}
-			if !sendTransitionEvents(send, previous, snap) {
+			if !send("snapshot", snap) {
 				return
 			}
 			previous = sectionByTrain(snap)

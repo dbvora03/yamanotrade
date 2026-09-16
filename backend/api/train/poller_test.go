@@ -80,7 +80,7 @@ func TestPollerUsesCanonicalIDAndDeterministicFallback(t *testing.T) {
 	}
 }
 
-func TestPollSkipsRecordsWithoutACompleteSection(t *testing.T) {
+func TestPollKeepsStationObservationsAndSkipsMissingOrigins(t *testing.T) {
 	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`[
 			{"odpt:trainNumber":"at-station","odpt:fromStation":"station-a","odpt:toStation":null},
@@ -97,7 +97,10 @@ func TestPollSkipsRecordsWithoutACompleteSection(t *testing.T) {
 		t.Fatal(err)
 	}
 	trains := p.Snapshot().Trains
-	if len(trains) != 1 || trains[0].TrainNumber != "between-stations" {
+	if len(trains) != 2 || trains[0].TrainNumber != "at-station" || trains[0].PositionKind != "station" || trains[0].ToStation != "" {
+		t.Fatalf("unexpected station observation: %+v", trains)
+	}
+	if trains[0].Progress != nil || trains[1].TrainNumber != "between-stations" || trains[1].PositionKind != "section" {
 		t.Fatalf("unexpected trains: %+v", trains)
 	}
 }
@@ -168,5 +171,15 @@ func TestPollDoesNotFollowRedirectWithConsumerKey(t *testing.T) {
 func TestNewPollerRequiresKey(t *testing.T) {
 	if _, err := NewPoller(Config{}); err == nil {
 		t.Fatal("expected missing key error")
+	}
+}
+
+func TestNewPollerDefaultsToFiveSecondInterval(t *testing.T) {
+	p, err := NewPoller(Config{ConsumerKey: "test-key"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.config.Interval != 5*time.Second {
+		t.Fatalf("interval = %s", p.config.Interval)
 	}
 }

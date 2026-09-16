@@ -73,11 +73,6 @@ type SectionChanged = {
   current_segment: { from_station: string; to_station: string; direction: string };
 };
 
-type StationConfirmed = {
-  train_id: string;
-  station: string;
-};
-
 type Segment = { origin: number; destination: number };
 type WheelTransition = Segment & { leaving: number; key: number };
 const demoInitialSegment: Segment = { origin: 21, destination: 20 };
@@ -90,6 +85,22 @@ function stationName(value: string) {
 function stationIndex(value: string) {
   const normalized = stationName(value).toLocaleLowerCase();
   return stations.findIndex((station) => station.toLocaleLowerCase() === normalized);
+}
+
+function segmentForObservation(fromStation: string, toStation: string, direction: string): Segment | null {
+  const origin = stationIndex(fromStation);
+  if (origin < 0) return null;
+  const reportedDestination = stationIndex(toStation);
+  if (reportedDestination >= 0) return { origin, destination: reportedDestination };
+  const step = direction.toLocaleLowerCase().includes("outer") ? -1 : 1;
+  return { origin, destination: (origin + step + stations.length) % stations.length };
+}
+
+function trainOptionLabel(train: Train) {
+  const origin = stationName(train.from_station);
+  return train.position_kind === "station" || !train.to_station
+    ? `${train.train_number} · At ${origin}`
+    : `${train.train_number} · ${origin} → ${stationName(train.to_station)}`;
 }
 
 function formattedTime(value?: string) {
@@ -139,7 +150,6 @@ export default function Home() {
   const [transitionProgress, setTransitionProgress] = useState<{ trainId: string; fraction: number } | null>(null);
   const [visibleSegment, setVisibleSegment] = useState<Segment | null>(liveMode && apiBase ? null : demoInitialSegment);
   const visibleSegmentRef = useRef<Segment | null>(liveMode && apiBase ? null : demoInitialSegment);
-  const pendingSegmentRef = useRef<Segment | null>(null);
   const [wheelTransition, setWheelTransition] = useState<WheelTransition | null>(null);
   const [demoFraction, setDemoFraction] = useState(0);
   const wheelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -156,13 +166,16 @@ export default function Home() {
       selectedTrainIdRef.current = selectedTrain.id;
       setSelectedTrainId(selectedTrain.id);
     }
-    const sectionStart = selectedTrain ? stationIndex(selectedTrain.from_station) : -1;
-    const sectionEnd = selectedTrain ? stationIndex(selectedTrain.to_station) : -1;
-    if (sectionStart >= 0) setIndex(sectionStart);
-    if (sectionStart >= 0 && sectionEnd >= 0 && !visibleSegmentRef.current) {
-      const segment = { origin: sectionStart, destination: sectionEnd };
-      visibleSegmentRef.current = segment;
-      setVisibleSegment(segment);
+    const segment = selectedTrain
+      ? segmentForObservation(selectedTrain.from_station, selectedTrain.to_station, selectedTrain.direction)
+      : null;
+    if (segment) {
+      setIndex(segment.origin);
+      const visible = visibleSegmentRef.current;
+      if (!visible || visible.origin !== segment.origin || visible.destination !== segment.destination) {
+        visibleSegmentRef.current = segment;
+        setVisibleSegment(segment);
+      }
     }
     setTransitionProgress(null);
   }, []);
@@ -218,23 +231,14 @@ export default function Home() {
       try {
         const change = JSON.parse((event as MessageEvent<string>).data) as SectionChanged;
         if (change.train_id !== selectedTrainIdRef.current) return;
-        const sectionStart = stationIndex(change.current_segment.from_station);
-        const sectionEnd = stationIndex(change.current_segment.to_station);
-        if (sectionStart >= 0 && sectionEnd >= 0) pendingSegmentRef.current = { origin: sectionStart, destination: sectionEnd };
-      } catch {
-        setConnection("reconnecting");
-      }
-    });
-    stream.addEventListener("station.confirmed", (event) => {
-      try {
-        const confirmation = JSON.parse((event as MessageEvent<string>).data) as StationConfirmed;
-        if (confirmation.train_id !== selectedTrainIdRef.current) return;
-        const confirmedIndex = stationIndex(confirmation.station);
-        const next = pendingSegmentRef.current;
-        if (confirmedIndex >= 0 && next && next.origin === confirmedIndex) {
+        const next = segmentForObservation(
+          change.current_segment.from_station,
+          change.current_segment.to_station,
+          change.current_segment.direction
+        );
+        if (next) {
           setIndex(next.origin);
-          startWheelTransition(next, confirmation.train_id);
-          pendingSegmentRef.current = null;
+          startWheelTransition(next, change.train_id);
         }
       } catch {
         setConnection("reconnecting");
@@ -265,7 +269,7 @@ export default function Home() {
       }
     };
     void loadStatus();
-    const timer = window.setInterval(() => void loadStatus(), 30_000);
+    const timer = window.setInterval(() => void loadStatus(), 5_000);
     return () => {
       active = false;
       window.clearInterval(timer);
@@ -391,7 +395,7 @@ export default function Home() {
             <label className="train-picker">
               <span>Selected live train</span>
               <select value={activeTrain?.id ?? ""} onChange={(event) => selectTrain(event.target.value)}>
-                {snapshot.trains.map((train) => <option key={train.id} value={train.id}>{train.train_number} · {stationName(train.from_station)} → {stationName(train.to_station)}</option>)}
+                {snapshot.trains.map((train) => <option key={train.id} value={train.id}>{trainOptionLabel(train)}</option>)}
               </select>
             </label>
           )}

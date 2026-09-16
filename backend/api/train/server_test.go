@@ -166,14 +166,14 @@ func TestSSEEmitsTransitionEvents(t *testing.T) {
 	p.updated = firstAt.Add(2 * time.Minute)
 	p.publishLocked(p.snapshotLocked())
 	p.mu.Unlock()
-	if event, _ := readEvent(); event != "event: snapshot\n" {
-		t.Fatalf("snapshot event %q", event)
-	}
 	if event, data := readEvent(); event != "event: train.section_changed\n" || !strings.Contains(data, `"previous_segment":{"from_station":"odpt.Station:A"`) || !strings.Contains(data, `"current_segment":{"from_station":"odpt.Station:B"`) {
 		t.Fatalf("section event=%q data=%q", event, data)
 	}
 	if event, data := readEvent(); event != "event: station.confirmed\n" || !strings.Contains(data, `"station":"odpt.Station:B"`) || !strings.Contains(data, `"confidence":"provider_confirmed_transition"`) {
 		t.Fatalf("station event=%q data=%q", event, data)
+	}
+	if event, _ := readEvent(); event != "event: snapshot\n" {
+		t.Fatalf("snapshot event %q", event)
 	}
 }
 func TestUnavailableSnapshot(t *testing.T) {

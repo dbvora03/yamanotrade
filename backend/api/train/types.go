@@ -13,7 +13,8 @@ type VisualProgress struct {
 	Confidence              string    `json:"confidence"`
 }
 
-// Train is a section-level observation. It deliberately contains no GPS coordinates.
+// Train is a provider observation at a station or on a section. It deliberately
+// contains no GPS coordinates.
 type Train struct {
 	ID           string    `json:"id"`
 	TrainNumber  string    `json:"train_number"`

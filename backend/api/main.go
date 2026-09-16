@@ -54,7 +54,7 @@ func main() {
 	poller, err := train.NewPoller(train.Config{
 		ConsumerKey:             odptConsumerKey(),
 		Endpoint:                odptEndpoint(),
-		Interval:                duration("ODPT_POLL_INTERVAL", 30*time.Second),
+		Interval:                duration("ODPT_POLL_INTERVAL", 5*time.Second),
 		HTTPTimeout:             duration("ODPT_HTTP_TIMEOUT", 10*time.Second),
 		FallbackSegmentDuration: duration("SEGMENT_FALLBACK_DURATION", 150*time.Second),
 		SegmentHistorySize:      positiveInt("SEGMENT_HISTORY_SIZE", 32),
