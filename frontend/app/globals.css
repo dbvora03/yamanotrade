@@ -46,7 +46,7 @@ button:focus-visible, select:focus-visible {
 
 .market-status { justify-self:center; display:inline-flex; align-items:center; gap:7px; margin:0 0 2px; border:1px solid #d9dcd3; border-radius:999px; padding:6px 10px; background:rgba(255,255,255,.84); color:#41463d; box-shadow:0 4px 14px rgba(21,23,22,.05); font-size:11px; font-weight:800; letter-spacing:.08em; line-height:1; text-transform:uppercase; }
 .market-status-dot { width:7px; height:7px; border-radius:50%; background:#b58a31; box-shadow:0 0 0 3px rgba(181,138,49,.12); }
-.market-status-active { border-color:#bfd2d0; color:var(--green-deep); background:#f2f7f6; }.market-status-active .market-status-dot { background:var(--green-deep); box-shadow:0 0 0 3px rgba(50,105,102,.13); }
+.market-status-active { border:0; color:var(--paper); background:var(--green); }.market-status-active .market-status-dot { background:#fff; box-shadow:0 0 0 0 rgba(255,255,255,.65); animation:live-pulse 1.8s ease-out infinite; }
 .market-status-closed { color:#71571d; background:#fffaf0; }.market-status-complete { border-color:#bfd2d0; color:var(--green-deep); background:#f2f7f6; }.market-status-complete .market-status-dot { background:var(--green-deep); box-shadow:0 0 0 3px rgba(50,105,102,.13); }
 .market-status-forfeited { border-color:#e6cccc; color:#8a3e3a; background:#fff7f6; }.market-status-forfeited .market-status-dot { background:#b9534d; box-shadow:0 0 0 3px rgba(185,83,77,.12); }
 
@@ -196,6 +196,7 @@ button:focus-visible, select:focus-visible {
 @keyframes wheel-to-origin { from { transform:translateX(163%); } to { transform:translateX(0); } }
 @keyframes wheel-to-destination { from { transform:translateX(163%); } to { transform:translateX(0); } }
 @keyframes wheel-leave { from { transform:translateX(0); } to { transform:translateX(-163%); } }
+@keyframes live-pulse { 0% { box-shadow:0 0 0 0 rgba(255,255,255,.65); } 70%, 100% { box-shadow:0 0 0 6px rgba(255,255,255,0); } }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
