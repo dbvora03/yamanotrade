@@ -1,0 +1,11 @@
+{
+  "name": "yamanote-prediction-contracts",
+  "version": "1.0.0",
+  "description": "Local compiler dependency for the Anvil prediction-market prototype.",
+  "private": true,
+  "scripts": {},
+  "type": "commonjs",
+  "devDependencies": {
+    "solc": "^0.8.28"
+  }
+}

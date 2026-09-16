@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -33,8 +34,23 @@ func duration(name string, fallback time.Duration) time.Duration {
 	}
 	return fallback
 }
+func positiveInt(name string, fallback int) int {
+	if raw := os.Getenv(name); raw != "" {
+		if value, err := strconv.Atoi(raw); err == nil && value > 0 {
+			return value
+		}
+		log.Printf("invalid %s=%q; using %d", name, raw, fallback)
+	}
+	return fallback
+}
 func main() {
-	poller, err := train.NewPoller(train.Config{ConsumerKey: odptConsumerKey(), Interval: duration("ODPT_POLL_INTERVAL", 30*time.Second), HTTPTimeout: duration("ODPT_HTTP_TIMEOUT", 10*time.Second)})
+	poller, err := train.NewPoller(train.Config{
+		ConsumerKey:             odptConsumerKey(),
+		Interval:                duration("ODPT_POLL_INTERVAL", 30*time.Second),
+		HTTPTimeout:             duration("ODPT_HTTP_TIMEOUT", 10*time.Second),
+		FallbackSegmentDuration: duration("SEGMENT_FALLBACK_DURATION", 150*time.Second),
+		SegmentHistorySize:      positiveInt("SEGMENT_HISTORY_SIZE", 32),
+	})
 	if err != nil {
 		log.Fatal(err)
 	}

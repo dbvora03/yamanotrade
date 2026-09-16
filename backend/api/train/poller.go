@@ -17,10 +17,12 @@ import (
 const DefaultEndpoint = "https://api.odpt.org/api/v4/odpt:Train"
 
 type Config struct {
-	ConsumerKey string
-	Endpoint    string
-	Interval    time.Duration
-	HTTPTimeout time.Duration
+	ConsumerKey             string
+	Endpoint                string
+	Interval                time.Duration
+	HTTPTimeout             time.Duration
+	FallbackSegmentDuration time.Duration
+	SegmentHistorySize      int
 }
 
 type odptTrain struct {
@@ -41,11 +43,24 @@ type Poller struct {
 	now    func() time.Time
 	random func() float64
 
-	mu       sync.RWMutex
-	latest   []Train
-	updated  time.Time
-	lastErr  error
-	watchers map[chan Snapshot]struct{}
+	mu              sync.RWMutex
+	latest          []Train
+	updated         time.Time
+	lastErr         error
+	watchers        map[chan Snapshot]struct{}
+	stationWatchers map[chan StationConfirmation]struct{}
+
+	// These are inference state from the provider observation timeline, not
+	// physical arrival data or coordinates. They are protected by mu.
+	estimator      *segmentEstimator
+	previous       map[string]trainObservation
+	segmentEntered map[string]trainObservation
+}
+
+type trainObservation struct {
+	segment    segmentKey
+	observedAt time.Time
+	enteredAt  time.Time
 }
 
 func NewPoller(c Config) (*Poller, error) {
@@ -61,6 +76,12 @@ func NewPoller(c Config) (*Poller, error) {
 	if c.HTTPTimeout <= 0 {
 		c.HTTPTimeout = 10 * time.Second
 	}
+	if c.FallbackSegmentDuration <= 0 {
+		c.FallbackSegmentDuration = 150 * time.Second
+	}
+	if c.SegmentHistorySize <= 0 {
+		c.SegmentHistorySize = 32
+	}
 	return &Poller{
 		config: c,
 		client: &http.Client{
@@ -69,7 +90,9 @@ func NewPoller(c Config) (*Poller, error) {
 			// redirect that could forward it to a different origin.
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
-		now: time.Now, random: rand.Float64, watchers: make(map[chan Snapshot]struct{}),
+		now: time.Now, random: rand.Float64, watchers: make(map[chan Snapshot]struct{}), stationWatchers: make(map[chan StationConfirmation]struct{}),
+		estimator: newSegmentEstimator(c.FallbackSegmentDuration, c.SegmentHistorySize),
+		previous:  make(map[string]trainObservation), segmentEntered: make(map[string]trainObservation),
 	}, nil
 }
 
@@ -110,7 +133,11 @@ func (p *Poller) fetch(ctx context.Context) ([]Train, error) {
 		if parsed, err := time.Parse(time.RFC3339, item.Date); err == nil {
 			observed = parsed
 		}
-		trains = append(trains, Train{ID: trainID(item), TrainNumber: item.Number, Direction: item.Direction, FromStation: item.From, ToStation: item.To, DelaySeconds: item.Delay, ObservedAt: observed, PositionKind: "section"})
+		trains = append(trains, Train{
+			ID: trainID(item), TrainNumber: strings.TrimSpace(item.Number), Direction: strings.TrimSpace(item.Direction),
+			FromStation: strings.TrimSpace(item.From), ToStation: strings.TrimSpace(item.To), DelaySeconds: item.Delay,
+			ObservedAt: observed, PositionKind: "section",
+		})
 	}
 	return trains, nil
 }
@@ -146,9 +173,13 @@ func (p *Poller) Poll(ctx context.Context) error {
 		p.publishLocked(s)
 		return err
 	}
+	confirmations := p.observeTransitionsLocked(trains)
 	p.latest, p.updated, p.lastErr = trains, p.now().UTC(), nil
 	s := p.snapshotLocked()
 	p.publishLocked(s)
+	for _, confirmation := range confirmations {
+		p.publishStationConfirmationLocked(confirmation)
+	}
 	return nil
 }
 
@@ -171,9 +202,31 @@ func (p *Poller) publishLocked(s Snapshot) {
 	}
 }
 
+func (p *Poller) publishStationConfirmationLocked(confirmation StationConfirmation) {
+	for ch := range p.stationWatchers {
+		select {
+		case ch <- confirmation:
+		default:
+			// Retain only the newest event for a stalled consumer. Coordinators must
+			// reconcile their active round from chain state after a restart.
+			select {
+			case <-ch:
+			default:
+			}
+			select {
+			case ch <- confirmation:
+			default:
+			}
+		}
+	}
+}
+
 func (p *Poller) snapshotLocked() Snapshot {
 	trains := make([]Train, len(p.latest))
 	copy(trains, p.latest)
+	for i := range trains {
+		trains[i].Progress = p.progressLocked(trains[i])
+	}
 	s := Snapshot{Trains: trains, Stale: p.updated.IsZero()}
 	if !p.updated.IsZero() {
 		updated := p.updated
@@ -190,7 +243,146 @@ func (p *Poller) snapshotLocked() Snapshot {
 	}
 	return s
 }
+
+// observeTransitionsLocked records the elapsed provider-observation time for a
+// section only when the same train is next observed on its adjoining section.
+func (p *Poller) observeTransitionsLocked(trains []Train) []StationConfirmation {
+	confirmations := make([]StationConfirmation, 0)
+	next := make(map[string]trainObservation, len(trains))
+	nextEntered := make(map[string]trainObservation, len(trains))
+	for _, train := range trains {
+		key := newSegmentKey(train.FromStation, train.ToStation, train.Direction)
+		current := trainObservation{segment: key, observedAt: train.ObservedAt, enteredAt: train.ObservedAt}
+		previous, hadPrevious := p.previous[train.ID]
+		if hadPrevious && previous.segment == key {
+			current.enteredAt = previous.enteredAt
+		} else if hadPrevious && previous.segment.to == key.from && previous.segment.direction == key.direction {
+			// This is an observed section transition. Its duration is an inference
+			// bounded by provider observations, not a physical station-arrival time.
+			p.estimator.record(previous.segment, current.observedAt.Sub(previous.observedAt))
+			start, end := previous.observedAt, current.observedAt
+			if end.Before(start) {
+				start, end = end, start
+			}
+			confirmations = append(confirmations, StationConfirmation{
+				TrainID: train.ID, Station: previous.segment.to, Direction: key.direction,
+				ArrivalWindowStart: start, ArrivalWindowEnd: end, ConfirmedAt: train.ObservedAt,
+				Confidence: "provider_confirmed_transition",
+			})
+		}
+		next[train.ID] = current
+		nextEntered[train.ID] = current
+	}
+	// Dropping absent trains prevents a later reappearance from being treated as
+	// a consecutive observation.
+	p.previous, p.segmentEntered = next, nextEntered
+	return confirmations
+}
+
+func (p *Poller) progressLocked(train Train) *VisualProgress {
+	entered, ok := p.segmentEntered[train.ID]
+	if !ok || entered.segment != newSegmentKey(train.FromStation, train.ToStation, train.Direction) || entered.enteredAt.IsZero() {
+		return nil
+	}
+	duration, _, _, method, confidence := p.estimator.estimate(entered.segment)
+	seconds := int64(duration.Round(time.Second) / time.Second)
+	if seconds < 1 {
+		seconds = 1
+	}
+	fraction := p.now().UTC().Sub(entered.enteredAt).Seconds() / float64(seconds)
+	if fraction < 0 {
+		fraction = 0
+	}
+	// A train stays visually within its current section until a provider section
+	// transition is observed, so it never appears to have arrived early.
+	if fraction >= 1 {
+		fraction = 0.99
+	}
+	return &VisualProgress{EstimatedFraction: fraction, SegmentEnteredAt: entered.enteredAt, ExpectedDurationSeconds: seconds, Method: method, Confidence: confidence}
+}
+
+// SegmentEstimate returns a generated display estimate for an exact section.
+func (p *Poller) SegmentEstimate(from, to, direction string) SegmentEstimate {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	key := newSegmentKey(from, to, direction)
+	duration, median, samples, method, confidence := p.estimator.estimate(key)
+	expected := int64(duration.Round(time.Second) / time.Second)
+	if expected < 1 {
+		expected = 1
+	}
+	result := SegmentEstimate{FromStation: key.from, ToStation: key.to, Direction: key.direction, ExpectedDurationSeconds: expected, SampleCount: samples, Method: method, Confidence: confidence, GeneratedAt: p.now().UTC()}
+	if median != nil {
+		seconds := int64(median.Round(time.Second) / time.Second)
+		result.ObservedMedianSeconds = &seconds
+	}
+	return result
+}
 func (p *Poller) Snapshot() Snapshot { p.mu.RLock(); defer p.mu.RUnlock(); return p.snapshotLocked() }
+
+// ServiceStatus deliberately uses only a small, every-day JST off-hours window
+// (02:00 through before 04:00). The 04:30 JST resumption estimate is a cautious
+// heuristic: JR East's public Yamanote timetable includes early departures at
+// about that time, but weekday, weekend, holiday, and special timetables vary.
+// A fresh live train observation wins even inside the window (for example, an
+// exceptional service). Empty, failed, or stale data is never called a
+// disruption and never receives a resumption time.
+func (p *Poller) ServiceStatus() ServiceStatus {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	now := p.now().UTC()
+	result := ServiceStatus{GeneratedAt: now, Source: "odpt:Train"}
+	snap := p.snapshotLocked()
+	if !snap.Stale && len(snap.Trains) > 0 {
+		latest := snap.Trains[0].ObservedAt
+		for _, train := range snap.Trains[1:] {
+			if train.ObservedAt.After(latest) {
+				latest = train.ObservedAt
+			}
+		}
+		result.Running = true
+		result.Status = "active"
+		result.Reason = "live_train_observations"
+		result.ObservedAt = &latest
+		result.Confidence = "high"
+		return result
+	}
+
+	if inConservativeScheduledOffHours(now) {
+		resumesAt := conservativeResumesAt(now)
+		result.Status = "scheduled_off_hours"
+		result.Reason = "conservative_jst_schedule_window"
+		result.Source = "jst_schedule_heuristic"
+		result.Confidence = "medium"
+		result.ResumesAt = &resumesAt
+		return result
+	}
+	if snap.GeneratedAt == nil || snap.Stale || snap.LastError != "" {
+		result.Status = "degraded"
+		result.Reason = "live_feed_unavailable_or_stale"
+		result.Confidence = "none"
+		return result
+	}
+	result.Status = "unknown"
+	result.Reason = "no_live_train_observations"
+	result.Confidence = "low"
+	return result
+}
+
+func inConservativeScheduledOffHours(now time.Time) bool {
+	hour := now.In(jstLocation).Hour()
+	return hour >= 2 && hour < 4
+}
+
+var jstLocation = time.FixedZone("JST", 9*60*60)
+
+// conservativeResumesAt intentionally does not model weekday, holiday, or
+// disruption exceptions. It is only emitted after inConservativeScheduledOffHours.
+func conservativeResumesAt(now time.Time) time.Time {
+	jst := now.In(jstLocation)
+	return time.Date(jst.Year(), jst.Month(), jst.Day(), 4, 30, 0, 0, jstLocation)
+}
 
 // Subscribe atomically installs a subscriber and returns the corresponding initial
 // snapshot. Sending that snapshot after subscribing cannot lose a concurrent poll.
@@ -205,6 +397,23 @@ func (p *Poller) Subscribe() (Snapshot, <-chan Snapshot, func()) {
 		p.mu.Lock()
 		if _, ok := p.watchers[ch]; ok {
 			delete(p.watchers, ch)
+			close(ch)
+		}
+		p.mu.Unlock()
+	}
+}
+
+// SubscribeStationConfirmations is an internal subscription API. HTTP clients
+// should continue using the SSE stream, which remains backward-compatible.
+func (p *Poller) SubscribeStationConfirmations() (<-chan StationConfirmation, func()) {
+	p.mu.Lock()
+	ch := make(chan StationConfirmation, 1)
+	p.stationWatchers[ch] = struct{}{}
+	p.mu.Unlock()
+	return ch, func() {
+		p.mu.Lock()
+		if _, ok := p.stationWatchers[ch]; ok {
+			delete(p.stationWatchers, ch)
 			close(ch)
 		}
 		p.mu.Unlock()
